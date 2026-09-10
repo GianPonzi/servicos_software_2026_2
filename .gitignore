@@ -1,0 +1,14 @@
+# Ambiente local (uv)
+.venv/
+.python-version
+pyproject.toml
+uv.lock
+
+# Anotações locais
+comandos_git.md
+README.md
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
