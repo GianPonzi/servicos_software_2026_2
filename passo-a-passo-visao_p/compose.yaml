@@ -1,116 +1,113 @@
-name: whisper-lab
+name: visao-lab
+
+# Cinco servicos, uma rede, tres volumes nomeados.
+# A chave image: nao muda nada agora - ela existe para o docker compose push
+# da aula 06 e para o kompose da aula 07.
 
 services:
-
-  # ------------------------------------------------------------------
-  # Front-end: interface web Gradio. É o ÚNICO serviço que precisa
-  # publicar porta no host — é ele que o navegador do aluno acessa.
-  # ------------------------------------------------------------------
+  # ---------------- trilha de audio (vinda da aula 05) ----------------
   gradio-service:
+    image: ${DOCKERHUB_USER}/gradio-service:${TAG}
     build:
       context: ./gradio-json
       dockerfile: Dockerfile
     container_name: whisper-frontend
     ports:
-      - "${FRONTEND_PORT:-7860}:7860"
+      - "${FRONTEND_PORT}:7860"
     environment:
-      # O hostname abaixo é o NOME DO SERVIÇO vizinho neste arquivo.
-      # É esse nome que o DNS interno do Docker (127.0.0.11) resolve.
-      # Usar "localhost" aqui NÃO funciona: dentro deste contêiner,
-      # localhost é este próprio contêiner.
-      BACKEND_URL: "http://${BACKEND_HOST:-backend-service}:${BACKEND_PORT:-8080}"
-      REQUEST_TIMEOUT: "${REQUEST_TIMEOUT:-600}"
+      BACKEND_URL: http://${BACKEND_HOST}:${BACKEND_PORT}
     depends_on:
       backend-service:
-        # Espera o healthcheck do back-end passar, não apenas o
-        # contêiner ser criado. Sem isso, as primeiras transcrições
-        # falham enquanto o modelo Whisper ainda está carregando.
         condition: service_healthy
-    networks:
-      - app-net
+    networks: [ app-net ]
     restart: unless-stopped
 
-  # ------------------------------------------------------------------
-  # Back-end: API FastAPI com Whisper. Em produção NÃO publicaria
-  # porta alguma — a linha "ports" existe só para conseguirmos
-  # testar a API isoladamente com curl.
-  # ------------------------------------------------------------------
   backend-service:
+    image: ${DOCKERHUB_USER}/backend-service:${TAG}
     build:
       context: ./backend-json
       dockerfile: Dockerfile
     container_name: whisper-backend
-    expose:
-      - "8080"
     ports:
-      - "${BACKEND_PUBLISHED_PORT:-8080}:8080"   # opcional: só depuração
+      - "${BACKEND_PORT}:8080"
     environment:
-      WHISPER_MODEL: "${WHISPER_MODEL:-base}"
-      WHISPER_LANGUAGE: "${WHISPER_LANGUAGE:-pt}"
+      WHISPER_MODEL: ${WHISPER_MODEL}
     volumes:
-      # Volume NOMEADO: o modelo baixado sobrevive ao "compose down".
-      # A primeira subida demora minutos; as seguintes, segundos.
       - whisper-models:/root/.cache/whisper
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8080/')"]
+      test: [ "CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8080/')" ]
       interval: 15s
       timeout: 10s
       retries: 5
-      # Janela em que as falhas não contam: cobre o download e a
-      # carga do modelo na primeira execução.
       start_period: 300s
-    networks:
-      - app-net
+    networks: [ app-net ]
     restart: unless-stopped
 
+  # ---------------- trilha de imagem (nova) ----------------
   visao-service:
     image: ${DOCKERHUB_USER}/visao-service:${TAG}
-    build: { context: ./gradio-visao, dockerfile: Dockerfile }
+    build:
+      context: ./gradio-visao
+      dockerfile: Dockerfile
     container_name: visao-frontend
-    ports: ["${VISAO_PORT}:7861"]
+    ports:
+      - "${VISAO_PORT}:7861"
     environment:
       ANALISE_URL: http://${ANALISE_HOST}:${ANALISE_PORT}
     depends_on:
-      analise-service: { condition: service_healthy }
-    networks: [app-net]
+      analise-service:
+        condition: service_healthy
+    networks: [ app-net ]
     restart: unless-stopped
- 
+
   analise-service:
     image: ${DOCKERHUB_USER}/analise-service:${TAG}
-    build: { context: ./api-visao, dockerfile: Dockerfile }
+    build:
+      context: ./api-visao
+      dockerfile: Dockerfile
     container_name: visao-backend
-    ports: ["${ANALISE_PORT}:8081"]
+    ports:
+      - "${ANALISE_PORT}:8081"
     environment:
       MODELO_VISAO: ${MODELO_VISAO}
       ARMAZENAMENTO_URL: http://${ARMAZENAMENTO_HOST}:${ARMAZENAMENTO_PORT}
-    volumes: [hf-models:/root/.cache/huggingface]
+    volumes:
+      - hf-models:/root/.cache/huggingface
     depends_on:
-      armazenamento-service: { condition: service_healthy }
-    networks: [app-net]
+      armazenamento-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8081/')" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    networks: [ app-net ]
+    restart: unless-stopped
 
   armazenamento-service:
     image: ${DOCKERHUB_USER}/armazenamento-service:${TAG}
-    build: { context: ./api-armazenamento, dockerfile: Dockerfile }
+    build:
+      context: ./api-armazenamento
+      dockerfile: Dockerfile
     container_name: visao-armazenamento
-    ports: ["${ARMAZENAMENTO_PORT}:8082"]
+    ports:
+      - "${ARMAZENAMENTO_PORT}:8082"
     volumes:
       - dados-imagens:/dados
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request as u; u.urlopen('http://localhost:8082/')"]
+      test: [ "CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8082/')" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks: [app-net]
+    networks: [ app-net ]
     restart: unless-stopped
-
 
 volumes:
   whisper-models:
   hf-models:
   dados-imagens:
- 
+
 networks:
   app-net: { driver: bridge }
-

@@ -30,6 +30,11 @@ def init_db():
  
 init_db()
 
+@app.get("/")
+def status():
+    # endpoint leve, usado pelo healthcheck
+    return {"status": "ok"}
+
 @app.post("/salvar")
 async def salvar_dados(file: UploadFile = File(...), rotulo: str = Form(...)):
     # basename impede que "../../etc/senha" escreva fora de /dados

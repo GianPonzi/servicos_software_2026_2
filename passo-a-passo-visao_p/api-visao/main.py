@@ -10,7 +10,7 @@ ARMAZENAMENTO_URL = os.getenv("ARMAZENAMENTO_URL", "http://armazenamento-service
 app = FastAPI(title="Serviço de Visão")
 
 print(f"Carregando modelo de visao: ({MODELO})...", flush=True)
-classificador = pipeline("imagem-classification", model = MODELO)
+classificador = pipeline("image-classification", model = MODELO)
 print("Modelo carregado!", flush=True)
 
 @app.get("/")
@@ -19,12 +19,12 @@ def status():
     return {"status": "ok"}
 
 @app.post("/analisar")
-async def analisar_imagem(file; UploadFile = File(...)):
+async def analisar_imagem(file: UploadFile = File(...)):
     conteudo = await file.read()
     try:
         imagem = Image.open(io.BytesIO(conteudo)).convert("RGB")
     except Exception:
-        raize HTTPException(status_code=415, detail="Imagem inválida")
+        raise HTTPException(status_code=415, detail="Imagem inválida")
 
     resultados = classificador(imagem)
     melhor = resultados[0]
