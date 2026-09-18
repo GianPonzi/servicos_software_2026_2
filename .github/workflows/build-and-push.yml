@@ -1,0 +1,75 @@
+# Pipeline CI/CD da disciplina.
+#
+# CI  - a cada push, constroi as cinco imagens da aula 06.
+# CD  - na branch main, publica as imagens no Docker Hub.
+#
+# Antes do primeiro uso, crie dois secrets no repositorio
+# (Settings -> Secrets and variables -> Actions):
+#   DOCKERHUB_USERNAME  seu usuario do Docker Hub
+#   DOCKERHUB_TOKEN     um access token gerado em hub.docker.com
+#
+# Nunca use a senha da conta: o token pode ser revogado sem troca-la.
+#
+# Repare no par (servico, contexto): o nome do SERVICO no compose.yaml e o
+# nome da IMAGEM; o CONTEXTO e a pasta de build. Sao coisas diferentes - e
+# confundi-las e o erro que a aula 05 mostrou no slide "Hostname inexistente".
+
+name: build-and-push
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "passo-a-passo-visao/**"
+      - ".github/workflows/build-and-push.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "passo-a-passo-visao/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - servico: gradio-service
+            contexto: gradio-json
+          - servico: backend-service
+            contexto: backend-json
+          - servico: visao-service
+            contexto: gradio-visao
+          - servico: analise-service
+            contexto: api-visao
+          - servico: armazenamento-service
+            contexto: api-armazenamento
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # O login so acontece num push na main: em pull request apenas
+      # construimos, sem publicar.
+      - name: Login no Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Construir e publicar ${{ matrix.servico }}
+        uses: docker/build-push-action@v6
+        with:
+          context: passo-a-passo-visao/${{ matrix.contexto }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.servico }}:v1.0
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.servico }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

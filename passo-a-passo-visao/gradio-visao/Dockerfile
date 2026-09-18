@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # ARG existe apenas durante o build e não vai para a imagem final;
 # ENV persiste e fica disponível para o processo em execução.
-ARG GRADIO_SERVER_PORT=7860
+ARG GRADIO_SERVER_PORT=7861
 ENV GRADIO_SERVER_PORT=${GRADIO_SERVER_PORT}
 
 # Sem isto o Python bufferiza a saída e "docker compose logs" aparece
@@ -16,8 +16,8 @@ COPY requirements.txt /work/requirements.txt
 RUN pip install --no-cache-dir -r /work/requirements.txt
 
 # 2º o código — camada volátil
-COPY app-gradio.py /work/
+COPY app.py /work/
 
-EXPOSE 7860
+EXPOSE 7861
 
-CMD ["python", "/work/app-gradio.py"]
+CMD ["python", "/work/app.py"]
